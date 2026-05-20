@@ -14,16 +14,23 @@ services:
 
   app:
     build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - .:/app
+    command: >
+      sh -c "
+        echo 'Waiting 15 seconds for DB...';
+        sleep 15;
+        echo 'Starting app...';
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+      "
+    # volumes:
+    #   - .:/app
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://library:library123@db:5432/library
-      SECRET_KEY: your-secret-key-change-in-production
+      SECRET_KEY: coursework-secret-key-2024
     depends_on:
       - db
+    restart: unless-stopped
 
 volumes:
   pgdata:
