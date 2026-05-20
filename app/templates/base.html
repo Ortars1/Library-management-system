@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📚 Библиотека</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Скрываем элементы до инициализации, чтобы не мелькали */
+        #login-link, #register-link { display: none; }
+        #logout-btn { display: none; }
+        #nav-menu { display: none; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <h1>📚 Библиотека</h1>
+            <div class="header-right" id="header-right">
+                <span id="user-info"></span>
+                <button id="logout-btn" onclick="logout()">Выйти</button>
+                <a href="/login" id="login-link">Войти</a>
+                <a href="/register" id="register-link">Регистрация</a>
+            </div>
+        </div>
+    </header>
+    <nav id="nav-menu">
+        <a href="/">Каталог</a>
+        <a href="/my-loans" id="nav-my-loans">Мои выдачи</a>
+        <a href="/books/manage" id="nav-manage">Управление книгами</a>
+        <a href="/admin/users" id="nav-admin">Админ-панель</a>
+    </nav>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <script>
+        // Ждём полной загрузки DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            initApp();
+        });
+        
+        function initApp() {
+            const token = localStorage.getItem('token');
+            let user = null;
+            try {
+                const userData = localStorage.getItem('user');
+                if (userData && userData !== 'null' && userData !== null) {
+                    user = JSON.parse(userData);
+                }
+            } catch (e) {
+                console.error('Error parsing user data:', e);
+            }
+            
+            const loginLink = document.getElementById('login-link');
+            const registerLink = document.getElementById('register-link');
+            const logoutBtn = document.getElementById('logout-btn');
+            const userInfo = document.getElementById('user-info');
+            const navMenu = document.getElementById('nav-menu');
+            
+            // Сначала скрываем всё
+            loginLink.style.display = 'none';
+            registerLink.style.display = 'none';
+            logoutBtn.style.display = 'none';
+            userInfo.textContent = '';
+            navMenu.style.display = 'none';
+            
+            // Скрываем все пункты меню
+            document.getElementById('nav-my-loans').style.display = 'none';
+            document.getElementById('nav-manage').style.display = 'none';
+            document.getElementById('nav-admin').style.display = 'none';
+            
+            if (token && user) {
+                // Пользователь авторизован
+                userInfo.textContent = user.username + ' (' + getRoleName(user.role) + ')';
+                logoutBtn.style.display = 'inline-block';
+                navMenu.style.display = 'flex';
+                
+                // "Мои выдачи" только для читателя
+                if (user.role === 'reader') {
+                    document.getElementById('nav-my-loans').style.display = 'inline-block';
+                }
+                // Управление книгами для библиотекаря и админа
+                if (user.role === 'librarian' || user.role === 'admin') {
+                    document.getElementById('nav-manage').style.display = 'inline-block';
+                }
+                // Админка только для админа
+                if (user.role === 'admin') {
+                    document.getElementById('nav-admin').style.display = 'inline-block';
+                }
+            } else {
+                // Не авторизован
+                loginLink.style.display = 'inline-block';
+                registerLink.style.display = 'inline-block';
+            }
+        }
+        
+        function getRoleName(role) {
+            const roles = {
+                'reader': 'Читатель',
+                'librarian': 'Библиотекарь',
+                'admin': 'Админ'
+            };
+            return roles[role] || role;
+        }
+        
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/';
+        }
+        
+        async function apiRequest(url, method = 'GET', body = null) {
+            const token = localStorage.getItem('token');
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (token) {
+                headers['Authorization'] = 'Bearer ' + token;
+            }
+            
+            const options = {
+                method: method,
+                headers: headers
+            };
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+            
+            try {
+                const response = await fetch(url, options);
+                const data = await response.json();
+                
+                if (response.status === 401) {
+                    logout();
+                    return null;
+                }
+                
+                if (!response.ok) {
+                    const errorMsg = data.detail || 'Ошибка';
+                    if (typeof errorMsg === 'string') {
+                        alert(errorMsg);
+                    } else if (Array.isArray(errorMsg)) {
+                        alert(errorMsg.map(e => e.msg || e).join('\n'));
+                    } else {
+                        alert(JSON.stringify(errorMsg));
+                    }
+                    return null;
+                }
+                
+                return data;
+            } catch (error) {
+                alert('Ошибка сети: ' + error.message);
+                return null;
+            }
+        }
+    </script>
+</body>
+</html>

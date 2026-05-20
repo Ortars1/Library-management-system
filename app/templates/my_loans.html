@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <h2>Мои выдачи</h2>
+    <div id="loans-list"></div>
+</div>
+<script>
+    const authToken = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    
+    // Защита: только для читателей
+    if (!user || user.role !== 'reader') {
+        document.getElementById('loans-list').innerHTML = '<p class="error">Доступ запрещён. Эта страница только для читателей.</p>';
+    } else {
+        loadLoans();
+    }
+    
+    async function loadLoans() {
+        try {
+            const response = await fetch('/api/v1/loans/my', {
+                headers: {
+                    'Authorization': 'Bearer ' + authToken
+                }
+            });
+            
+            if (!response.ok) {
+                document.getElementById('loans-list').innerHTML = '<p class="error">Ошибка загрузки данных</p>';
+                return;
+            }
+            
+            const loans = await response.json();
+            renderLoans(loans);
+        } catch (error) {
+            document.getElementById('loans-list').innerHTML = '<p class="error">Ошибка: ' + error.message + '</p>';
+        }
+    }
+    
+    function renderLoans(loans) {
+        const container = document.getElementById('loans-list');
+        if (loans.length === 0) {
+            container.innerHTML = '<p class="no-data">У вас нет выдач. <a href="/">Перейти в каталог</a></p>';
+            return;
+        }
+        
+        const active = loans.filter(l => l.status === 'active');
+        const returned = loans.filter(l => l.status === 'returned');
+        
+        let html = '';
+        
+        if (active.length > 0) {
+            html += '<h3> Активные выдачи</h3>';
+            html += active.map(loan => `
+                <div class="loan-card">
+                    <h4>${escapeHtml(loan.book_title)} — ${escapeHtml(loan.book_author)}</h4>
+                    <p>📅 Взята: ${formatDate(loan.loan_date)}</p>
+                    <p>⏰ Вернуть до: ${formatDate(loan.due_date)}</p>
+                </div>
+            `).join('');
+        }
+        
+        if (returned.length > 0) {
+            html += '<h3 style="margin-top: 30px;">📜 История выдач</h3>';
+            html += returned.map(loan => `
+                <div class="loan-card">
+                    <h4>${escapeHtml(loan.book_title)} — ${escapeHtml(loan.book_author)}</h4>
+                    <p>📅 Взята: ${formatDate(loan.loan_date)}</p>
+                    <p>↩️ Возвращена: ${formatDate(loan.return_date)}</p>
+                </div>
+            `).join('');
+        }
+        
+        container.innerHTML = html;
+    }
+    
+    function formatDate(dateStr) {
+        if (!dateStr) return '—';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('ru-RU');
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <h2>Каталог книг</h2>
+    <div class="search-box">
+        <input type="text" id="search-input" placeholder="Поиск по названию или автору">
+        <button onclick="searchBooks()">Искать</button>
+    </div>
+    <div id="books-list" class="books-grid"></div>
+</div>
+<script>
+    let currentUser = null;
+    let authToken = null;
+    
+    (async function init() {
+        authToken = localStorage.getItem('token');
+        const userData = localStorage.getItem('user');
+        if (userData && userData !== 'null') {
+            try {
+                currentUser = JSON.parse(userData);
+            } catch (e) {
+                console.error('Error parsing user data:', e);
+            }
+        }
+        await loadBooks();
+    })();
+    
+    async function loadBooks(query = '') {
+        let url = '/api/v1/books';
+        if (query) {
+            url += '?q=' + encodeURIComponent(query);
+        }
+        
+        const headers = {};
+        if (authToken) {
+            headers['Authorization'] = 'Bearer ' + authToken;
+        }
+        
+        try {
+            const response = await fetch(url, { headers });
+            if (!response.ok) {
+                document.getElementById('books-list').innerHTML = '<p class="error">Ошибка загрузки книг</p>';
+                return;
+            }
+            const books = await response.json();
+            renderBooks(books);
+        } catch (error) {
+            document.getElementById('books-list').innerHTML = '<p class="error">Ошибка: ' + error.message + '</p>';
+        }
+    }
+    
+    function renderBooks(books) {
+        const container = document.getElementById('books-list');
+        if (books.length === 0) {
+            container.innerHTML = '<p class="no-data">Книги не найдены. Добавьте книги через панель управления.</p>';
+            return;
+        }
+        
+        container.innerHTML = books.map(book => {
+            let button = '';
+            
+            // ТОЛЬКО читатель может брать книги
+            if (currentUser && currentUser.role === 'reader') {
+                if (book.available_copies > 0) {
+                    button = `<button class="borrow-btn" onclick="borrowBook(${book.id})">Взять книгу</button>`;
+                } else {
+                    button = '<span class="unavailable">Нет в наличии</span>';
+                }
+            } else if (!currentUser) {
+                // Гость
+                button = '<span class="login-hint"><a href="/login">Войдите</a>, чтобы взять</span>';
+            } else {
+                // Библиотекарь или админ — видят только информацию о доступности
+                button = `<span class="info-text">Доступно: ${book.available_copies} из ${book.total_copies}</span>`;
+            }
+            
+            return `
+                <div class="book-card">
+                    <h3>${escapeHtml(book.title)}</h3>
+                    <p><strong>Автор:</strong> ${escapeHtml(book.author)}</p>
+                    <p><strong>Год:</strong> ${book.year}</p>
+                    <p><strong>ISBN:</strong> ${escapeHtml(book.isbn)}</p>
+                    <p class="availability ${book.available_copies > 0 ? 'available' : 'unavailable'}">
+                        Доступно: ${book.available_copies} из ${book.total_copies}
+                    </p>
+                    ${button}
+                </div>
+            `;
+        }).join('');
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    async function searchBooks() {
+        const query = document.getElementById('search-input').value.trim();
+        await loadBooks(query);
+    }
+    
+    async function borrowBook(bookId) {
+        if (!authToken || !currentUser || currentUser.role !== 'reader') {
+            alert('Только читатели могут брать книги');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/v1/loans', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + authToken
+                },
+                body: JSON.stringify({ book_id: bookId })
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+                alert(result.detail || 'Ошибка при выдаче книги');
+                return;
+            }
+            
+            alert('Книга успешно выдана!');
+            loadBooks(document.getElementById('search-input').value.trim());
+        } catch (error) {
+            alert('Ошибка: ' + error.message);
+        }
+    }
+    
+    document.getElementById('search-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') searchBooks();
+    });
+</script>
+{% endblock %}
