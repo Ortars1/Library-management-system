@@ -83,7 +83,6 @@ def fuzz_book_endpoint(iterations=100):
     return stats, crashes
 
 if __name__ == "__main__":
-    print("=" * 60)
     print("ФАЗЗИНГ-ТЕСТИРОВАНИЕ УСТОЙЧИВОСТИ API")
     print("=" * 60)
     
@@ -106,7 +105,7 @@ if __name__ == "__main__":
     print(f"Время: {elapsed:.2f} сек")
     
     if total_500 == 0:
-        print("\n✅ ВЫВОД: Сервер устойчив к фаззингу. Ошибок 500 не обнаружено.")
+        print("\n✅ ВЫВОД: Ошибок 500 не обнаружено.")
     else:
         print(f"\n❌ ВЫВОД: Обнаружено {total_500} ошибок сервера. Требуется анализ.")
         if total_crashes > 0:
